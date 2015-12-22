@@ -1,0 +1,212 @@
+﻿<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Mozio Google API</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .header {
+          width: 100%;
+          margin-top: 50px;
+          text-align: center;
+          height: 100px;
+      }
+
+      #map {
+        height: 70%;
+        width: 60%;
+        margin: 0 auto;
+        position: relative; 
+        overflow: hidden; 
+        transform: translateZ(0px); 
+        background-color: rgb(229, 227, 223);
+      }
+    </style>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+    <script type="text/javascript">
+
+        // Function for allowing csrf security token for HTTP POST method
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie != '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = jQuery.trim(cookies[i]);
+                    if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        var csrftoken = getCookie('csrftoken');
+
+        // These HTTP methods do not require CSRF protection
+        function csrfSafeMethod(method) { 
+            return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+        }
+
+        // Checking the method type before sending data
+        $.ajaxSetup({
+            beforeSend: function (xhr, settings) {
+                if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+                    xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                }
+            }
+        });
+        
+        // On page load
+        $(document).ready(function () {
+
+            var lastSavedDataId = -1;
+            var polygon;
+            var map;
+            var markers = [];
+            var path = new google.maps.MVCArray;
+            initMap();
+
+            // Function for initializing the google map
+            function initMap() {
+
+                var position = new google.maps.LatLng(41.8369, -87.6847);
+
+                var map = new google.maps.Map(document.getElementById('map'), {
+                    center: position,
+                    zoom: 7,
+                    mapTypeId: google.maps.MapTypeId.TERRAIN
+                });
+
+                polygon = new google.maps.Polygon({
+                    strokeWeight: 3,
+                    fillColor: '#5555FF'
+                });
+
+                polygon.setMap(map);
+                polygon.setPaths(new google.maps.MVCArray([path]));
+
+                google.maps.event.addListener(map, 'click', addPoint);
+
+            }
+
+            // Function for creating array of markers on the map
+            function addPoint(event) {
+
+                path.insertAt(path.length, event.latLng);
+
+                var marker = new google.maps.Marker({
+                    position: event.latLng,
+                    map: map,
+                    visible: true,
+                    draggable: true
+                });
+
+                markers.push(marker);
+                marker.setTitle("#" + path.length);
+
+                google.maps.event.addListener(marker, 'click', function () {
+                    marker.setMap(null);
+                    for (var i = 0, I = markers.length; i < I && markers[i] != marker; ++i);
+                    markers.splice(i, 1);
+                    path.removeAt(i);
+                });
+
+                google.maps.event.addListener(marker, 'dragend', function () {
+                    for (var i = 0, I = markers.length; i < I && markers[i] != marker; ++i);
+                    path.setAt(i, marker.getPosition());
+                });
+
+            }
+
+            // Function for clearing the map
+            function clearvariables() {
+                polygon.setMap(null);
+                lastSavedDataId = -1;
+                polygon;
+                map;
+                markers = [];
+                path = new google.maps.MVCArray;
+                initMap();
+            }
+   
+            // Clearing the map
+            $("#clear-button").click(function () {
+                clearvariables();
+            });
+    
+            // Submit data event
+            $("#add-button").click(function () {
+                var coordinates = [];
+                var markersSize = markers.length;
+                for (var i = 0; i < markersSize; i++) {
+                    coordinates.push({
+                        lat: markers[i].getPosition().lat(),
+                        long: markers[i].getPosition().lng()
+                    });
+                }
+                if (coordinates.length == 0) {
+                    alert("Please select something on MAP");
+                    return;
+                }
+                saveData($("#guest-name").val(), coordinates);
+            });
+
+            // Next page event
+            $("#next-page").click(function () {
+                polygon.setMap(null);
+                markers = [];
+                var lastId = localStorage.getItem('lastSavedDataId');
+                if (lastId) {
+                    window.location = '/secondpage'
+                }
+                else {
+                    alert("Please save your created polygon");
+                }
+            });
+
+            // Function for saving data in the database
+            function saveData(guestName, coordinates) {
+                localStorage.setItem('recentData', JSON.stringify(saveData));
+                var saveData = new Object();
+                saveData.guestName = guestName;
+                saveData.coordinates = coordinates;
+                $.ajax({
+                    type: "POST",
+                    url: "/savecoordinates",
+                    cache: false,
+                    data: JSON.stringify(saveData),
+                    dataType: 'json',
+                    success: function (data) {
+
+                        lastSavedDataId = data;
+                        localStorage.setItem('lastSavedDataId', data);
+                        alert("Data saved successfully");
+                        clearvariables();
+
+                    },
+                    error: function (error) {
+                    }
+                });
+            }
+
+        });
+       
+
+    </script>
+</head>
+<body style="margin:0px; padding:0px;" onload="" >
+    <div class="header">
+        <input type="text" name="gustname" id="guest-name" value="Guest">
+        <button type="button" value="submit" id="add-button">Submit</button>
+        <button type="button" value="clear" id="clear-button">Clear</button>
+        <button type="button" value="next" id="next-page">GO to second page</button>
+    </div>
+    <div id="map"></div>
+</body>
+</html>

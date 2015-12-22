@@ -1,0 +1,136 @@
+﻿<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title>Mozio Google API</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .header {
+          width: 100%;
+          margin-top: 50px;
+          text-align: center;
+          height: 100px;
+      }
+
+      #map {
+        height: 70%;
+        width: 60%;
+        margin: 0 auto;
+        position: relative; 
+        overflow: hidden; 
+        transform: translateZ(0px); 
+        background-color: rgb(229, 227, 223);
+      }
+
+    </style>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script>
+    <script type="text/javascript">
+
+        // On page load
+        $(document).ready(function () {
+
+            // Getting the last saved id from local browser storage
+            var lastStoredID = localStorage.getItem("lastSavedDataId");
+            if (lastStoredID) {
+                getcoordinates(lastStoredID, initMap);
+            } else {
+                alert("Please save some data on the first page");
+            }
+            
+            $("#prev-page").click(function () {
+                window.location = '/firstpage'
+            });
+
+        });
+
+        var map;
+        var infoWindow;
+
+        // Function for initializing the google map
+        function initMap(coordinates) {
+
+             map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 7,
+                center: {lat: 41.836, lng: -87.684},
+                mapTypeId: google.maps.MapTypeId.TERRAIN
+            });
+
+            var paths = coordinates;
+
+            // Constructing the polygon with dynamic coordinates from the firstpage
+            var polygon = new google.maps.Polygon({
+                paths: paths,
+                strokeColor: '#FF0000',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.35
+            });
+            polygon.setMap(map);
+
+            polygon.addListener('click', showArrays);
+            infoWindow = new google.maps.InfoWindow;
+
+        }
+
+        // Function for showing info box with coordinates inside the polygon area
+        function showArrays(event) {
+
+            var vertices = this.getPath();
+
+            var contentString = '<b>Guest polygon</b><br>' +
+                'Location is in the polygon: <br>' + event.latLng.lat() + ',' + event.latLng.lng() +
+                '<br>';
+
+            for (var i = 0; i < vertices.getLength() ; i++) {
+                var xy = vertices.getAt(i);
+                contentString += '<br>' + 'Coordinate ' + i + ':<br>' + xy.lat() + ',' +
+                    xy.lng();
+            }
+
+            infoWindow.setContent(contentString);
+            infoWindow.setPosition(event.latLng);
+
+            infoWindow.open(map);
+
+        }
+
+        // Getting coordinates from the last saved polygon
+        function getcoordinates(id, callback) {
+            console.log("get coordinates");
+            $.ajax({
+                type: "GET",
+                url: "/getcoordinates/" + id,
+                cache: false,
+                dataType: 'json',
+                success: function (data) {
+
+                    var coordinates = [];
+                    for (var i = 0; i < data.length ; i++) {
+                        console.log(data[i]);
+                        point = {
+                            lat: data[i][0],
+                            lng: data[i][1]
+                        };
+                        coordinates.push(point);
+                    }
+                    callback(coordinates);
+
+                },
+            });
+        }
+
+    </script>
+</head>
+<body style="margin:0px; padding:0px;" onload="initialize()" >
+    <div class="header">
+        <button type="button" value="Submit" id="prev-page">Go to the first page</button>
+    </div>
+    <div id="map"></div>
+</body>
+</html>
